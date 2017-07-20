@@ -1,0 +1,3 @@
+queue:
+- name: taskexample
+  rate: 5/s
