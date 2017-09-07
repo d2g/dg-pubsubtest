@@ -1,2 +1,2 @@
 # dg-pubsubtest
-Google Appengine Standard PubSub (Not Working Example)
+Google Appengine Standard PubSub Old API Example
