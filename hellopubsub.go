@@ -1,10 +1,16 @@
 package dgpubsub
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 
-	"cloud.google.com/go/pubsub"
+	//"cloud.google.com/go/pubsub"
+
+	"golang.org/x/oauth2/google"
+
+	pubsub "google.golang.org/api/pubsub/v1"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/taskqueue"
@@ -29,45 +35,38 @@ func hello(w http.ResponseWriter, r *http.Request) {
 	log.Debugf(ctx, "Context Got")
 
 	log.Debugf(ctx, "Creating PUBSUB Client")
-	pc, err := pubsub.NewClient(ctx, appengine.RequestID(ctx))
+	hc, err := google.DefaultClient(ctx, pubsub.PubsubScope)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error Getting Pubsub Client: %s", err), http.StatusInternalServerError)
 		return
 	}
-	log.Debugf(ctx, "PUBSUB Client Got")
 
-	log.Debugf(ctx, "Getting Topic")
-	tpc := pc.Topic("example")
-	tpc.PublishSettings.CountThreshold = 0
-	log.Debugf(ctx, "Topic Got")
-
-	log.Debugf(ctx, "Creating Message")
-	msg := &pubsub.Message{
-		Data: []byte("Hello"),
-	}
-
-	log.Debugf(ctx, "Publishing Message")
-	pr := tpc.Publish(ctx, msg)
-	log.Debugf(ctx, "Message Published")
-
-	//So we use PR
-	log.Debugf(ctx, "PR: %v", pr)
-
-	log.Debugf(ctx, "Awaiting Response")
-
-	id, err := pr.Get(ctx)
+	ps, err := pubsub.New(hc)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error Getting Message Details: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error Getting Pubsub Service: %s", err), http.StatusInternalServerError)
 		return
 	}
-	log.Debugf(ctx, "Got Message ID")
 
-	fmt.Fprintf(w, "Message ID: %v\n", id)
-	log.Debugf(ctx, "Stopping Topic")
-	tpc.Stop()
-	log.Debugf(ctx, "Topic Stopped, closing client")
-	pc.Close()
-	log.Debugf(ctx, "Client Closed")
+	pr, err := ps.Projects.Topics.Publish(
+		"projects/dg-pubsubtest/topics/example",
+		&pubsub.PublishRequest{
+			Messages: []*pubsub.PubsubMessage{
+				{
+					Attributes: map[string]string{
+						"ATTR1": "Yes",
+						"ATTR2": "true",
+					},
+					Data: base64.StdEncoding.EncodeToString([]byte("hello")),
+				},
+			},
+		},
+	).Do()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error Publishing: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Publish Result: %v\n", pr)
 }
 
 //Registered as where the pub sub messages get delivered so we can see the request the message generates.
